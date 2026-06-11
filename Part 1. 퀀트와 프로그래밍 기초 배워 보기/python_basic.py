@@ -435,9 +435,138 @@ df.info()
 df
 df_melt = df.melt(id_vars=['species','island'])
 df_melt.info()
-len(df_melt)
+df_melt.head()
 
+import pandas as pd
+import seaborn as sns
 
+df_pivot_1 = df.pivot_table(
+    index='species',columns='island',
+    values='bill_length_mm',aggfunc='mean'
+)
+df_pivot_1
+
+df_pivot_2=df.pivot_table(
+    index=['species','sex'],columns='island',
+    values=['bill_length_mm','flipper_length_mm'],
+    aggfunc=['mean','count']
+)
+
+df_pivot_2
+
+df_pivot_4 = df.pivot_table(
+    index=['species','sex'],columns='island',
+    values='bill_length_mm',aggfunc='mean'
+)
+
+df_pivot_4
+
+df_pivot_4.stack()
+
+df_pivot_4.stack().to_frame()
+
+df_pivot_4.unstack()
+
+bill_length_mm = df['bill_length_mm']
+bill_length_mm.head()
+
+import numpy as np
+
+result = bill_length_mm.apply(np.sqrt)
+result.head()
+
+def mm_to_cm(num):
+    return num/10
+
+result_2 = bill_length_mm.apply(mm_to_cm)
+result_2.head()
+
+df_num = df[['bill_length_mm','bill_depth_mm','flipper_length_mm','body_mass_g']]
+df_num
+df_num.apply(max,axis=0)
+
+def num_null(data):
+    null_vec = pd.isnull(data)
+    null_count = np.sum(null_vec)
+
+    return null_count
+
+df_num.apply(num_null)
+
+df.head()
+
+df_group = df.groupby(['species'])
+df_group
+df_group.head(2)
+
+for key,group in df_group:
+    print(key)
+    print(group.head(2))
+
+df_group[['bill_length_mm','bill_depth_mm','flipper_length_mm','body_mass_g']].mean()
+
+df.groupby(['species','sex'])[['bill_length_mm','bill_depth_mm','flipper_length_mm','body_mass_g']].mean()
+
+def min_max(x):
+    return x.max() - x.min()
+
+df.groupby(['species'])['bill_length_mm'].agg(min_max)
+
+df.groupby(['species'])[['bill_length_mm','bill_depth_mm','flipper_length_mm','body_mass_g']].agg(['max','min'])
+
+df.groupby(['species']).agg({'bill_length_mm':['max','min'] , 'island':['count']})
+
+df.groupby(['species'])['bill_length_mm'].transform('mean')
+
+def z_score(x):
+    z = (x - x.mean()) / x.std()
+    return z
+
+df.groupby(['species'])['bill_length_mm'].transform(z_score)
+df.groupby(['species'])['bill_length_mm'].apply(min)
+df.groupby(['species'])['bill_length_mm'].apply(z_score)
+
+df.groupby(['species'])['bill_length_mm'].mean()
+
+df.groupby(['species']).filter(lambda x: x['bill_length_mm'].mean() >= 40)
+
+# 3.13 시계열 데이터 다루기
+
+df = sns.load_dataset('taxis')
+df.head()
+df.info()
+
+df['pickup'] = pd.to_datetime(df['pickup'])
+df['dropoff'] = pd.to_datetime(df['dropoff'])
+
+df['pickup'][0].year
+df['pickup'][0].month
+
+df['year'] = df['pickup'].dt.year
+df['month'] = df['pickup'].dt.month
+df['day'] = df['pickup'].dt.day
+df[['pickup','year','month','day']].head()
+
+df.sort_values('pickup', inplace=True)
+df.head(5)
+df.tail(5)
+df.reset_index(drop=True, inplace=True)
+df
+
+df['dropoff'] - df['pickup']
+df.set_index('pickup', inplace=True)
+df.head()
+
+df.index
+
+df.loc['2019-02']
+df.loc['2019-03-01':'2019-03-31']
+
+pd.date_range(start='2025-01-01', end='2025-12-31', freq='ME')
+pd.date_range(start='2025-01-01', end='2025-12-31', freq='3D')
+pd.date_range(start='2025-01-01', end='2025-12-31', freq='W-MON')
+pd.date_range(start='2025-01-01', end='2025-12-31', freq='WOM-2THU')
+pd.date_range(start='2025-01-01', end='2025-12-31', freq='WOM-2FRI')
 
 
 
