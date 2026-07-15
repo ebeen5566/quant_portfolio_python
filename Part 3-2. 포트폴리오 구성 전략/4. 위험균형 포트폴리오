@@ -1,0 +1,71 @@
+# 위험균형 포트폴리오(Risk Parity Portfolio) : 특정 자산이 포트폴리오의 위험을 대부분 차지하는 문제를 막고, 모든 자산이 동일한 위험기여도를 가지는 포트폴리오
+# 한계 위험기여도(Marginal Risk Portfolio) : 특정 자산의 비중을 한 단위 증가시켰을 때 전체 포트폴리오 위험의 증가를 나타내는 단위
+# 위험기여도(Risk Contribution) : 특정 자산이 포트폴리오 내에서 차지하는 위험의 비중
+
+import pandas as pd
+import pymysql
+from sqlalchemy import create_engine
+import numpy as np
+
+engine = create_engine('mysql+pymysql://root:@127.0.0.1:3306/stock_db')
+prices = pd.read_sql("""
+SELECT * FROM sample_etf;
+""", con=engine, index_col='Date')
+rets = prices.pct_change(1).dropna()
+
+
+## 포트폴리오 객체 생성
+import riskfolio as rp
+
+pd.DataFrame.append = pd.DataFrame._append
+
+port = rp.Portfolio(returns=rets)
+
+## 입력값 계산
+method_mu = 'hist' # 역사적 데이터를 바탕으로 기대 수익률 산정
+method_cov = 'hist' # 역사적 데이터를 바탕으로 분산-공분산 행렬 추정
+
+## 객체에 수익률 및 분산-공분산 입력
+port.assets_stats(method_mu=method_mu, method_cov=method_cov)
+
+model ='Classic'
+rm = 'MV'
+hist = True
+rf = 0
+b = None # 위험기여도 제약조건 -> 스칼라 데이터, 행렬곱 연산 제약 있음 -> None으로 설정함
+
+w_rp = port.rp_optimization(model=model, rm=rm, rf=rf, b=b, hist=hist)
+
+w_rp.T
+
+ax = rp.plot_risk_con(w_rp,
+                      cov=port.cov,
+                      returns=port.returns,
+                      rm=rm,
+                      rf=0,
+                      alpha=0.01,
+                      color='tab:blue',
+                      height=6,
+                      width=10,
+                      ax=None)
+plt.show()
+
+
+# 위험예산 포트폴리오(Risk Budget Portfolio) - 자산별로 다른 위험기여도
+b = [0.15, 0.15, 0.15, 0.15, 0.10, 0.10, 0.05, 0.05, 0.05, 0.05]
+
+w_rp = port.rp_optimization(model=model, rm=rm, rf=rf, b=b, hist=hist)
+
+w_rp.T
+
+ax = rp.plot_risk_con(w_rp,
+                      cov=port.cov,
+                      returns=port.returns,
+                      rm=rm,
+                      rf=0,
+                      alpha=0.01,
+                      color='tab:blue',
+                      height=6,
+                      width=10,
+                      ax=None)
+plt.show()

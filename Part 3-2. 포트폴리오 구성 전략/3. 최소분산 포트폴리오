@@ -1,0 +1,184 @@
+import pandas as pd
+import pymysql
+from sqlalchemy import create_engine
+import numpy as np
+
+engine = create_engine('mysql+pymysql://root:@127.0.0.1:3306/stock_db')
+prices = pd.read_sql("""
+SELECT * FROM sample_etf;
+""", con=engine, index_col='Date')
+rets = prices.pct_change(1).dropna()
+
+
+## 포트폴리오 객체 생성
+import riskfolio as rp
+
+pd.DataFrame.append = pd.DataFrame._append
+
+port = rp.Portfolio(returns=rets)
+
+## 입력값 계산
+method_mu = 'hist' # 역사적 데이터를 바탕으로 기대 수익률 산정
+method_cov = 'hist' # 역사적 데이터를 바탕으로 분산-공분산 행렬 추정
+
+## 객체에 수익률 및 분산-공분산 입력
+port.assets_stats(method_mu=method_mu, method_cov=method_cov)
+
+model ='Classic'
+rm = 'MV'
+obj = 'MinRisk' # 목적함수. MinRisk(최소분산), MaxRet(최대수익률), Utility(효용) or Sharpe(사프지수)
+hist = True
+rf = 0
+l = 0
+
+w = port.optimization(model=model, rm=rm, obj=obj, rf=rf, l=l, hist=hist)
+
+round(w.T, 4)
+
+import matplotlib.pyplot as plt
+
+ax = rp.plot_bar(w=w, title='Portfolio', kind='h', ax=None)
+plt.show()
+
+# 구석해(Corner Solution) 발생 : 변동성이 가장 낮은 종목에 대부분의 비중이 투자됨
+# 각종 제약 조건을 추가해야 함 
+
+## 최소 및 최대 투자비중 제약조건
+asset_classes = {
+    'Asset':
+    ['SPY', 'IEV', 'EWJ', 'EEM', 'TLT', 'IEF', 'IYR', 'RWX', 'GLD', 'DBC'],
+    'Class': [
+        'stock', 'stock', 'stock', 'stock', 'bond', 'bond', 'alternative',
+        'alternative', 'alternative', 'alternative'
+    ] 
+}
+
+asset_classes = pd.DataFrame(asset_classes)
+asset_classes
+
+constraints = {'Disabled': [False, False],
+               'Type': ['All Assets', 'All Assets'],
+               'Set': ['',''],
+               'Position': ['',''],
+               'Sign': ['>=','<='],
+               'Weight': [0.05, 0.2],
+               'Type Relative': ['',''],
+               'Relative Set': ['',''],
+               'Relative': ['',''],
+               'Factor': ['','']}
+
+constraints = pd.DataFrame(constraints)
+constraints
+
+A, B = rp.assets_constraints(constraints, asset_classes)
+
+port.ainequality = A
+port.binequality = B
+
+w = port.optimization(model=model, rm=rm, obj=obj, rf=rf, l=l, hist=hist)
+
+w.T
+
+ax = rp.plot_bar(w=w, title='Portfolio', kind='h', ax=None)
+plt.show()
+
+## 자산별로 최소 및 최대 투자비중이 다른 제약조건 설정
+constraints = {
+    'Disabled':[
+        False,False,False,False,False,False,False,False,False,False,
+        False,False,False,False,False,False,False,False,False,False
+    ],
+    'Type':[
+        'Assets','Assets','Assets','Assets','Assets','Assets','Assets','Assets','Assets','Assets',
+        'Assets','Assets','Assets','Assets','Assets','Assets','Assets','Assets','Assets','Assets'
+    ],
+    'Set':[
+        'Asset','Asset','Asset','Asset','Asset','Asset','Asset','Asset','Asset','Asset',
+        'Asset','Asset','Asset','Asset','Asset','Asset','Asset','Asset','Asset','Asset'
+    ],
+    'Position':[
+        'SPY', 'IEV', 'EWJ', 'EEM', 'TLT', 'IEF', 'IYR', 'RWX', 'GLD', 'DBC',
+        'SPY', 'IEV', 'EWJ', 'EEM', 'TLT', 'IEF', 'IYR', 'RWX', 'GLD', 'DBC'
+    ],
+    'Sign':[
+        '>=','>=','>=','>=','>=','>=','>=','>=','>=','>=',
+        '<=','<=','<=','<=','<=','<=','<=','<=','<=','<='
+    ],
+    'Weight':[
+        0.10, 0.10, 0.05, 0.05, 0.10, 0.10, 0.05, 0.05, 0.03, 0.03,
+        0.25, 0.25, 0.20, 0.20, 0.20, 0.20, 0.10, 0.10, 0.08, 0.08
+    ],
+    'Type Relative':[
+        '','','','','','','','','','',
+        '','','','','','','','','',''
+    ],
+    'Relative Set':[
+        '','','','','','','','','','',
+        '','','','','','','','','',''
+    ],
+    'Relative':[
+        '','','','','','','','','','',
+        '','','','','','','','','',''
+    ],
+    'Factor':[
+        '','','','','','','','','','',
+        '','','','','','','','','',''
+    ]
+}
+
+constraints = pd.DataFrame(constraints)
+
+constraints
+
+A, B = rp.assets_constraints(constraints, asset_classes)
+
+port.ainequality = A
+port.binequality = B
+
+w = port.optimization(model=model, rm=rm, obj=obj, rf=rf, l=l, hist=hist)
+
+w.T
+
+ax = rp.plot_bar(w=w, title='Portfolio', kind='h', ax=None)
+plt.show()
+
+ret_annual = (port.mu @ w).iloc[0,0] * 252
+vol_annual = np.sqrt((w.T @ port.cov @ w).iloc[0,0]) * np.sqrt(252)
+sharpe = ret_annual / vol_annual
+
+print(f"연 기대수익률: {ret_annual:.4%}")
+print(f"연 변동성: {vol_annual:.4%}")
+print(f"샤프비율: {sharpe:.4f}")
+
+## 자산군별 비중
+constraints = {
+    'Disabled': [False,False,False,False,False,False,False,False],
+    'Type': [
+        'All Assets', 'All Assets', 'Classes', 'Classes', 'Classes', 'Classes', 'Classes', 'Classes'
+    ],
+    'Set': ['','', 'Class','Class','Class','Class','Class','Class'],
+    'Position': 
+    ['','','stock','bond','alternative','stock','bond','alternative'],
+    'Sign':['>=','<=','>=','>=','>=','<=','<=','<='],
+    'Weight': [0.03, 0.20, 0.40, 0.30, 0.10, 0.70, 0.50, 0.20],
+    'Type Relative': ['','','','','','','',''],
+    'Relative Set': ['','','','','','','',''],
+    'Relative': ['','','','','','','',''],
+    'Factor': ['','','','','','','','']
+}
+
+constraints = pd.DataFrame(constraints)
+constraints
+
+A, B = rp.assets_constraints(constraints, asset_classes)
+
+port.ainequality = A
+port.binequality = B
+
+w = port.optimization(model=model, rm=rm, obj=obj, rf=rf, l=l, hist=hist)
+
+w.T
+
+w_concat = pd.concat([asset_classes.set_index('Asset'), w], axis=1)
+w_concat.groupby(['Class']).sum().sort_values(['weights'], ascending=False)
+

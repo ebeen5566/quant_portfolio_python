@@ -1,0 +1,80 @@
+# 샤프 지수 : (포트폴리오 수익 / 변동성)
+# 최대 샤프지수 포트폴리오 : 위험은 낮으면서 수익은 높은 지점
+import pandas as pd
+import pymysql
+from sqlalchemy import create_engine
+import numpy as np
+
+engine = create_engine('mysql+pymysql://root:@127.0.0.1:3306/stock_db')
+prices = pd.read_sql("""
+SELECT * FROM sample_etf;
+""", con=engine, index_col='Date')
+rets = prices.pct_change(1).dropna()
+
+
+## 포트폴리오 객체 생성
+import riskfolio as rp
+
+port = rp.Portfolio(returns=rets)
+
+## 입력값 계산
+method_mu = 'hist' # 역사적 데이터를 바탕으로 기대 수익률 산정
+method_cov = 'hist' # 역사적 데이터를 바탕으로 분산-공분산 행렬 추정
+
+## 객체에 수익률 및 분산-공분산 입력
+port.assets_stats(method_mu=method_mu, method_cov=method_cov)
+
+# print(method_mu)
+# print(method_cov)
+
+# print(rets.isna().sum())
+# print(np.isinf(rets).sum())
+
+# print(port.mu)
+# print(rets.shape)
+
+model = 'Classic' # 모델 입력. Classic(역사적 데이터), BL(블랙-리터만), FM(팩터 모형)
+rm = 'MV' # 위험 측정 방법. MV는 표준편차를 의미
+obj = 'Sharpe' # 목적함수. MinRisk(최소분산), MaxRet(최대수익률), Utility(효용) or Sharpe(샤프지수)
+hist = True # 역사적 데이터 사용
+rf = 0 # 무위험 수익률
+l = 0 # 위험 회피 계수, obj가 Utility 일 때만 사용
+
+# 최적화
+w = port.optimization(model=model, rm=rm, obj=obj, rf=rf, l=l, hist=hist)
+
+round(w.T, 4)
+
+# 효율적 투자선 
+points = 50 # 효율적 투자선을 구성하는 샘플 개수
+frontier = port.efficient_frontier(model=model,
+                                   rm=rm,
+                                   points=points,
+                                   rf=rf,
+                                   hist=hist)
+
+frontier.T.head().round(4) # 비중 산출
+
+import matplotlib.pyplot as plt
+label = 'Max Risk Adjusted Return Portfolio'
+mu = port.mu # 기대 수익률
+cov = port.cov # 분산-공분산 행렬
+returns = port.returns # 자산별 수익률
+
+ax = rp.plot_frontier(w_frontier=frontier,
+                      mu=mu,
+                      cov=cov,
+                      returns=returns,
+                      rm=rm,
+                      rf=rf,
+                      alpha=0.05,
+                      cmap='viridis',
+                      w=w,
+                      label=label,
+                      marker='*',
+                      s=16,
+                      c='r',
+                      height=6,
+                      width=10,
+                      ax=None)
+plt.show()
