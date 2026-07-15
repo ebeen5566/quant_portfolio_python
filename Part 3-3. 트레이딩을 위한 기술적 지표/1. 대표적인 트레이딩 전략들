@@ -1,0 +1,74 @@
+# 기술적 지표 - 추세의 방향이나 강도, 또는 가격의 움직임의 속도와 정도를 측정
+# 추세추종 전략: 주가가 동일한 방향으로 지속될 것이라는 데 베팅하며, 이동평균 등의 지표가 사용됨
+# 평균회귀 전략: 주가가 평균으로 다시 회귀하는 데 베팅하며, RSI, 볼린저 밴드 등의 지표가 사용됨
+
+# 이동평균 : 정해진 기간 주식의 평균가격
+
+## 단순 이동평균(Simple Moving Average)
+import yfinance as yf
+
+stock_data = yf.download('^GSPC', period='2y') # S&P500 / period 명시해줘야 함
+stock_data = stock_data.tail(500)
+len(stock_data)
+
+import pandas_ta as ta
+import matplotlib.pyplot as plt
+
+close = stock_data['Close'].squeeze()
+stock_data['SMA_20'] = ta.sma(close, length=20) # 20일 단순 이동평균
+stock_data['SMA_60'] = ta.sma(close, length=60) # 60일 단순 이동평균
+
+stock_data[['Close', 'SMA_20', 'SMA_60']].plot(figsize=(10, 6))
+plt.show()
+
+
+## 지수 이동평균(Exponential Moving Average)
+stock_data['EMA_60'] = ta.ema(close, 60) # 60일 지수 이동평균
+stock_data[['Close', 'SMA_60', 'EMA_60']].plot(figsize=(10, 6))
+plt.show()
+
+
+# 상대강도지수(RSI: Relative Strength Index) : 일정 기간 주가의 상승폭과 하락폭의 크기를 비교해 상승과 하락의 상대적인 강도를 나타낸 지표 | (Average Up / Average Down)
+# RSI > 70 : 과매수 구간(매도 신호) | RSI < 30 : 과매도 구간(매수 신호) 
+# 지나친 상승 후에는 하락, 지나친 하락 후에는 상승할 것을 기대함
+
+from matplotlib import gridspec
+
+stock_data['RSI_14'] = ta.rsi(close, length=14)
+stock_data.loc[:, 'RSI_14'] = stock_data['RSI_14'].fillna(0)
+fig = plt.subplots(figsize=(10,6), sharex=True)
+gs = gridspec.GridSpec(nrows=2, ncols=1, height_ratios=[2,1])
+
+## 주가 나타내기
+ax1 = plt.subplot(gs[0])
+ax1 = stock_data['Close'].plot()
+ax1.set_xlabel('')
+ax1.axes.xaxis.set_ticks([])
+
+## RSI 나타내기
+ax2 = plt.subplot(gs[1])
+ax2 = stock_data['RSI_14'].plot(color='black', ylim=[0., 100])
+ax2.axhline(y=70, color='r', linestyle='-')
+ax2.axhline(y=30, color='r', linestyle='-')
+ax2.set_xlabel
+plt.subplots_adjust(wspace=10, hspace=8)
+
+plt.show()
+
+
+# 볼린저 밴드 : 이동평균선을 중심으로 일정 표준편차를 상한선과 하한선으로 설정한 밴드
+import pandas as pd
+
+band = ta.bbands(close, length=20, std=2)
+bb = pd.concat([band[['BBL_20_2.0_2.0', 'BBM_20_2.0_2.0', 'BBU_20_2.0_2.0']], close], axis=1)
+bb.columns = ['Lower Band', 'Mid Band', 'Upper Band', 'Close']
+bb.plot(figsize=(10,6),
+        color={
+            'Upper Band': 'red',
+            'Lower Band': 'blue',
+            'Mid Band': 'green',
+            'Close': 'black'
+        })
+plt.show()
+
+bb
